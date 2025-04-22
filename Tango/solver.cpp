@@ -7,14 +7,9 @@ using namespace std;
 
 // Global Data Structures
 vector<vector<char>> board;
-
-// TODO: a cell can have relation with more than one other cell
-//       so a map of (cell -> cell) is not enough
-//       as it can hold only one relation per cell
-map<vector<int>, vector<int>> same; // intially empty
-map<vector<int>, vector<int>> diff; // intially empty
-
-queue<vector<int>> BFS;             // intially empty
+map<vector<int>, vector<vector<int>>> same; // map<cell -> vector<cell>>
+map<vector<int>, vector<vector<int>>> diff; // map<cell -> vector<cell>>
+queue<vector<int>> BFS;                     // queue<cell>
 vector<vector<int>> rowCount = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
 vector<vector<int>> colCount = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
 
@@ -27,6 +22,7 @@ void fillValue(int x, int y, char val);
 void workOnCell(int x, int y);
 void fillByTrio(int x1, int y1, int x2, int y2, int x3, int y3);
 void fillByRelation(int x, int y);
+void fillByAntiTrio(int x1, int y1, int x2, int y2, int x3, int y3);
 void fillByRows(int x);
 void fillByCols(int y);
 
@@ -98,15 +94,15 @@ bool readBoard()
             {
                 vector<int> left = {i, j};
                 vector<int> right = {i, j + 1};
-                same[left] = right;
-                same[right] = left;
+                same[left].push_back(right);
+                same[right].push_back(left);
             }
             if (relation == 'x')
             {
                 vector<int> left = {i, j};
                 vector<int> right = {i, j + 1};
-                diff[left] = right;
-                diff[right] = left;
+                diff[left].push_back(right);
+                diff[right].push_back(left);
             }
         }
         board.push_back(row);
@@ -116,19 +112,19 @@ bool readBoard()
         {
             skip_chars(filePointer, 2);
             char relation = read_char(filePointer); // either same('=') or diff('x') or none('-')
-            if (relation == 'x')
-            {
-                vector<int> up = {i, j};
-                vector<int> down = {i + 1, j};
-                diff[up] = down;
-                diff[down] = up;
-            }
             if (relation == '=')
             {
                 vector<int> up = {i, j};
                 vector<int> down = {i + 1, j};
-                same[up] = down;
-                same[down] = up;
+                same[up].push_back(down);
+                same[down].push_back(up);
+            }
+            if (relation == 'x')
+            {
+                vector<int> up = {i, j};
+                vector<int> down = {i + 1, j};
+                diff[up].push_back(down);
+                diff[down].push_back(up);
             }
             skip_chars(filePointer, 1);
         }
@@ -192,19 +188,25 @@ void fillValue(int x, int y, char val)
 void workOnCell(int i, int j)
 {
     // Checking Horizontal Trios
-    fillByTrio(i, j, (i + 1) % 6, j, (i + 2) % 6, j); // X x _
-    fillByTrio(i, j, (i + 2) % 6, j, (i + 1) % 6, j); // X _ x
-    fillByTrio(i, j, (i + 5) % 6, j, (i + 4) % 6, j); // _ x X
-    fillByTrio(i, j, (i + 4) % 6, j, (i + 5) % 6, j); // x _ X
-    fillByTrio(i, j, (i + 1) % 6, j, (i + 5) % 6, j); // _ X x
-    fillByTrio(i, j, (i + 5) % 6, j, (i + 1) % 6, j); // x X _
-    // Checking Vertical Trios
     fillByTrio(i, j, i, (j + 1) % 6, i, (j + 2) % 6); // X x _
     fillByTrio(i, j, i, (j + 2) % 6, i, (j + 1) % 6); // X _ x
     fillByTrio(i, j, i, (j + 5) % 6, i, (j + 4) % 6); // _ x X
     fillByTrio(i, j, i, (j + 4) % 6, i, (j + 5) % 6); // x _ X
     fillByTrio(i, j, i, (j + 1) % 6, i, (j + 5) % 6); // _ X x
     fillByTrio(i, j, i, (j + 5) % 6, i, (j + 1) % 6); // x X _
+    // Checking Vertical Trios
+    fillByTrio(i, j, (i + 1) % 6, j, (i + 2) % 6, j); // X x _
+    fillByTrio(i, j, (i + 2) % 6, j, (i + 1) % 6, j); // X _ x
+    fillByTrio(i, j, (i + 5) % 6, j, (i + 4) % 6, j); // _ x X
+    fillByTrio(i, j, (i + 4) % 6, j, (i + 5) % 6, j); // x _ X
+    fillByTrio(i, j, (i + 1) % 6, j, (i + 5) % 6, j); // _ X x
+    fillByTrio(i, j, (i + 5) % 6, j, (i + 1) % 6, j); // x X _
+    // Checking Horizontal Anti-Trios
+    fillByAntiTrio(i, j, i, (j + 1) % 6, i, (j + 2) % 6); // X _ _
+    fillByAntiTrio(i, j, i, (j + 5) % 6, i, (j + 4) % 6); // _ _ X
+    // Checking Vertical Anti-Trios
+    fillByAntiTrio(i, j, (i + 1) % 6, j, (i + 2) % 6, j); // X _ _
+    fillByAntiTrio(i, j, (i + 5) % 6, j, (i + 4) % 6, j); // _ _ X
     // Checking Relations
     fillByRelation(i, j);
     // Checking Row/Col Count
@@ -231,25 +233,57 @@ void fillByRelation(int x, int y)
     // if the cell has a 'same' relation
     if (same.find({x, y}) != same.end())
     {
-        int X = same[{x, y}][0];
-        int Y = same[{x, y}][1];
-        // and the partner cell is empty
-        if (board[X][Y] == ' ')
+        for (int i = 0; i < same[{x, y}].size(); i++)
         {
-            // then the partner cell can be filled with the same value
-            fillValue(X, Y, board[x][y]);
+            // if the cell has a 'same' relation with another cell
+            int X = same[{x, y}][i][0];
+            int Y = same[{x, y}][i][1];
+            // and the partner cell is empty
+            if (board[X][Y] == ' ')
+            {
+                // then the partner cell can be filled with the same value
+                fillValue(X, Y, board[x][y]);
+            }
         }
     }
     // if the cell has a 'diff' relation
     if (diff.find({x, y}) != diff.end())
     {
-        int X = diff[{x, y}][0];
-        int Y = diff[{x, y}][1];
-        // and the partner cell is empty
-        if (board[X][Y] == ' ')
+        for (int i = 0; i < diff[{x, y}].size(); i++)
         {
-            // then the partner cell can be filled with the opposite value
-            fillValue(X, Y, opposite(board[x][y]));
+            // if the cell has a 'diff' relation with another cell
+            int X = diff[{x, y}][i][0];
+            int Y = diff[{x, y}][i][1];
+            // and the partner cell is empty
+            if (board[X][Y] == ' ')
+            {
+                // then the partner cell can be filled with the same value
+                fillValue(X, Y, opposite(board[x][y]));
+            }
+        }
+    }
+}
+void fillByAntiTrio(int x1, int y1, int x2, int y2, int x3, int y3)
+{
+    // if cell2 & cell3 are related by '=' relation
+    if (same.find({x2, y2}) != same.end())
+    {
+        for (int i = 0; i < same[{x2, y2}].size(); i++)
+        {
+            // if cell2 & cell3 are related by '=' relation
+            if (x3 == same[{x2, y2}][i][0] && y3 == same[{x2, y2}][i][1])
+            {
+                // if cell2 is empty, then fill it with the opposite value of cell1
+                if (board[x2][y2] == ' ')
+                {
+                    fillValue(x2, y2, opposite(board[x1][y1]));
+                }
+                // if cell2 is empty, then fill it with the opposite value of cell1
+                if (board[x3][y3] == ' ')
+                {
+                    fillValue(x3, y3, opposite(board[x1][y1]));
+                }
+            }
         }
     }
 }
